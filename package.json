@@ -1,0 +1,79 @@
+{
+  "name": "alignment-sanity",
+  "displayName": "Alignment Sanity",
+  "description": "Virtual alignment of = : && || in TypeScript/TSX without modifying files",
+  "version": "1.0.0",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./out/extension.js",
+  "author": {
+    "name": "hborchardt"
+  },
+  "publisher": "zaydek",
+  "repository": "github:zaydek/alignment-sanity",
+  "license": "MIT",
+  "contributes": {
+    "commands": [{
+      "command": "virtual-better-align.CursorUp",
+      "title": "Virtual Better Align: Move cursor up"
+    },{
+      "command": "virtual-better-align.CursorDown",
+      "title": "Virtual Better Align: Move cursor down"
+    },{
+      "command": "virtual-better-align.CursorShiftUp",
+      "title": "Virtual Better Align: Move selection cursor up"
+    },{
+      "command": "virtual-better-align.CursorShiftDown",
+      "title": "Virtual Better Align: Move selection cursor down"
+    },{
+      "command": "virtual-better-align.ToggleActive",
+      "title": "Virtual Better Align: Toggle active"
+    }],
+    "keybindings": [
+      {
+        "command": "virtual-better-align.CursorUp",
+        "key": "up",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "virtual-better-align.CursorDown",
+        "key": "down",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "virtual-better-align.CursorShiftUp",
+        "key": "shift+up",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "virtual-better-align.CursorShiftDown",
+        "key": "shift+down",
+        "when": "editorTextFocus"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/mocha": "^10.0.6",
+    "@types/node": "18.x",
+    "@typescript-eslint/eslint-plugin": "^6.15.0",
+    "@typescript-eslint/parser": "^6.15.0",
+    "eslint": "^8.56.0",
+    "typescript": "^5.3.3",
+    "@vscode/test-cli": "^0.0.4",
+    "@vscode/test-electron": "^2.3.8"
+  }
+}
