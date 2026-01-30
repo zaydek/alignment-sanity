@@ -883,12 +883,16 @@ suite("Inline Object Isolation Tests", () => {
     const groups = groupTokens(tokens);
 
     // tokenIndex 0 should form a group (type: aligns)
-    const tokenIndex0Groups = groups.filter((g) => g.tokens[0].tokenIndex === 0);
+    const tokenIndex0Groups = groups.filter(
+      (g) => g.tokens[0].tokenIndex === 0,
+    );
     assert.strictEqual(tokenIndex0Groups.length, 1);
     assert.strictEqual(tokenIndex0Groups[0].tokens.length, 2);
 
     // tokenIndex 1 should NOT form a group (isolated by line)
-    const tokenIndex1Groups = groups.filter((g) => g.tokens[0].tokenIndex === 1);
+    const tokenIndex1Groups = groups.filter(
+      (g) => g.tokens[0].tokenIndex === 1,
+    );
     assert.strictEqual(tokenIndex1Groups.length, 0);
   });
 
