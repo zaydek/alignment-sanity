@@ -32,6 +32,12 @@ export interface AlignmentGroup {
   tokens: AlignmentToken[];
   /** Target column to align to (max column in group) */
   targetColumn: number;
+  /**
+   * Whether to pad AFTER the operator (true) or BEFORE (false).
+   * - For `:` operators: pad after (values align, like Go)
+   * - For `=`, `&&`, `||`: pad before (operators align)
+   */
+  padAfter: boolean;
 }
 
 /** Supported language identifiers */

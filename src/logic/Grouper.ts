@@ -76,24 +76,41 @@ export function groupTokens(tokens: AlignmentToken[]): AlignmentGroup[] {
 
 /**
  * Creates an alignment group from a list of tokens.
- * Calculates the target column as where operators should START:
- * the rightmost operator column position (so all operators align).
- * 
- * Example:
+ *
+ * For `:` operators (Go style): Pad AFTER the operator so VALUES align.
+ *   "short":    value  <- colon at column 8, pad after to align values
+ *   "longer":   value  <- colon at column 9, less pad needed
+ *
+ * For `=`, `&&`, `||` operators: Pad BEFORE the operator so OPERATORS align.
  *   passes   = sum(...)  <- operator at column 9
  *   warnings = sum(...)  <- operator at column 9
- *   fails    = sum(...)  <- operator at column 9
  */
 function createGroup(tokens: AlignmentToken[]): AlignmentGroup {
-  // Find the rightmost column where an operator starts
-  const maxColumn = Math.max(...tokens.map((t) => t.column));
-  // All operators should align at this column
-  const targetColumn = maxColumn;
+  const operatorType = tokens[0].type;
+
+  // `:` pads after (values align), everything else pads before (operators align)
+  const padAfter = operatorType === ":";
+
+  let targetColumn: number;
+
+  if (padAfter) {
+    // For `:`, find the rightmost position where an operator ENDS
+    // Values should all start at the same column after this
+    const maxEndColumn = Math.max(
+      ...tokens.map((t) => t.column + t.text.length),
+    );
+    targetColumn = maxEndColumn;
+  } else {
+    // For `=` etc., find the rightmost column where an operator STARTS
+    const maxColumn = Math.max(...tokens.map((t) => t.column));
+    targetColumn = maxColumn;
+  }
 
   return {
     id: `${tokens[0].line}-${tokens[0].column}-${tokens[0].type}`,
     tokens,
     targetColumn,
+    padAfter,
   };
 }
 
