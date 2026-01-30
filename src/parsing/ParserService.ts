@@ -103,6 +103,9 @@ const QUERIES: Record<string, string> = {
       operator: "&&" @op)
     (binary_expression
       operator: "||" @op)
+
+    ; Trailing comments: // comment
+    (comment) @op
   `,
 
   // TSX uses the same query patterns as TypeScript
@@ -140,6 +143,9 @@ const QUERIES: Record<string, string> = {
       operator: "&&" @op)
     (binary_expression
       operator: "||" @op)
+
+    ; Trailing comments: // comment
+    (comment) @op
   `,
 
   python: `
@@ -176,6 +182,9 @@ const QUERIES: Record<string, string> = {
       operator: "and" @op)
     (boolean_operator
       operator: "or" @op)
+
+    ; Trailing comments: # comment
+    (comment) @op
   `,
 
   css: `
@@ -396,6 +405,17 @@ export class ParserService {
         // Get indentation level of this line
         const lineText = document.lineAt(line).text;
         const indent = this.getIndentLevel(lineText);
+
+        // For comments, only include trailing comments (code before the comment)
+        if (operatorType === "//") {
+          const column = node.startPosition.column;
+          // Check if there's non-whitespace code before the comment
+          const beforeComment = lineText.substring(0, column);
+          if (beforeComment.trim().length === 0) {
+            // This is a standalone comment, not a trailing comment
+            continue;
+          }
+        }
 
         // Get parent type for structural grouping
         const parentType = this.getParentType(node);
@@ -919,6 +939,16 @@ export class ParserService {
 
           const lineText = lines[blockLine] || "";
           const indent = this.getIndentLevel(lineText);
+
+          // For comments, only include trailing comments (code before the comment)
+          if (operatorType === "//") {
+            const column = node.startPosition.column;
+            const beforeComment = lineText.substring(0, column);
+            if (beforeComment.trim().length === 0) {
+              continue;
+            }
+          }
+
           const parentType = this.getParentType(node);
 
           // Combine block scope with AST scope for fine-grained grouping
@@ -1131,6 +1161,10 @@ export class ParserService {
       case "or":
         return "or";
       default:
+        // Check for comments (// ... or # ...)
+        if (text.startsWith("//") || text.startsWith("#")) {
+          return "//";
+        }
         return null;
     }
   }

@@ -11,7 +11,7 @@ function token(
   line: number,
   column: number,
   text: string,
-  type: "=" | ":" | "," | "&&" | "||" | "and" | "or",
+  type: "=" | ":" | "," | "&&" | "||" | "and" | "or" | "//",
   opts?: {
     indent?: number;
     parentType?: string;
