@@ -13,63 +13,69 @@ import { AlignmentGroup, AlignmentToken } from "../core/types";
 
 /**
  * Groups tokens into alignment groups based on gofmt-style rules.
+ *
+ * Uses a bucket-based approach: tokens are first grouped by their structural
+ * properties (type, indent, parentType, tokenIndex), then filtered to only
+ * include consecutive line sequences.
  */
 export function groupTokens(tokens: AlignmentToken[]): AlignmentGroup[] {
   if (tokens.length === 0) {
     return [];
   }
 
-  // Sort by line number, then by column for consistent ordering
-  const sorted = [...tokens].sort((a, b) => {
-    if (a.line !== b.line) return a.line - b.line;
-    return a.column - b.column;
-  });
+  // Group tokens by their structural key (type, indent, parentType, tokenIndex)
+  const buckets = new Map<string, AlignmentToken[]>();
+
+  for (const token of tokens) {
+    const key = `${token.type}|${token.indent}|${token.parentType}|${token.tokenIndex}`;
+    if (!buckets.has(key)) {
+      buckets.set(key, []);
+    }
+    buckets.get(key)!.push(token);
+  }
 
   const groups: AlignmentGroup[] = [];
-  let currentGroup: AlignmentToken[] = [sorted[0]];
 
-  for (let i = 1; i < sorted.length; i++) {
-    const prev = currentGroup[currentGroup.length - 1];
-    const curr = sorted[i];
+  // For each bucket, find consecutive line sequences
+  for (const bucket of buckets.values()) {
+    if (bucket.length < 2) continue;
 
-    // All conditions for grouping (gofmt-style):
-    // 1. Same operator type
-    const sameType = curr.type === prev.type;
+    // Sort by line number
+    bucket.sort((a, b) => a.line - b.line);
 
-    // 2. Same indentation level (handles nesting - the JSON problem)
-    const sameIndent = curr.indent === prev.indent;
+    // Find consecutive sequences
+    let currentGroup: AlignmentToken[] = [bucket[0]];
 
-    // 3. Same AST parent type (handles structural role - the TypeScript problem)
-    const sameParentType = curr.parentType === prev.parentType;
+    for (let i = 1; i < bucket.length; i++) {
+      const prev = currentGroup[currentGroup.length - 1];
+      const curr = bucket[i];
 
-    // 4. Same token index on line (1st : with 1st :, etc.)
-    const sameTokenIndex = curr.tokenIndex === prev.tokenIndex;
-
-    // 5. Consecutive lines (must be on adjacent lines)
-    const isConsecutive = curr.line === prev.line + 1;
-
-    if (
-      sameType &&
-      sameIndent &&
-      sameParentType &&
-      sameTokenIndex &&
-      isConsecutive
-    ) {
-      currentGroup.push(curr);
-    } else {
-      // Finalize current group if it has multiple tokens
-      if (currentGroup.length > 1) {
-        groups.push(createGroup(currentGroup));
+      // Must be on consecutive lines
+      if (curr.line === prev.line + 1) {
+        currentGroup.push(curr);
+      } else {
+        // Finalize current group if it has multiple tokens
+        if (currentGroup.length > 1) {
+          groups.push(createGroup(currentGroup));
+        }
+        // Start new group
+        currentGroup = [curr];
       }
-      // Start new group
-      currentGroup = [curr];
+    }
+
+    // Don't forget the last group
+    if (currentGroup.length > 1) {
+      groups.push(createGroup(currentGroup));
     }
   }
 
-  // Don't forget the last group
-  if (currentGroup.length > 1) {
-    groups.push(createGroup(currentGroup));
-  }
+  // Sort groups by first token's line and column for consistent ordering
+  groups.sort((a, b) => {
+    if (a.tokens[0].line !== b.tokens[0].line) {
+      return a.tokens[0].line - b.tokens[0].line;
+    }
+    return a.tokens[0].column - b.tokens[0].column;
+  });
 
   return groups;
 }
@@ -77,9 +83,11 @@ export function groupTokens(tokens: AlignmentToken[]): AlignmentGroup[] {
 /**
  * Creates an alignment group from a list of tokens.
  *
- * For `:` operators (Go style): Pad AFTER the operator so VALUES align.
+ * For `:` and `,` operators (Go style): Pad AFTER the operator so VALUES align.
  *   "short":    value  <- colon at column 8, pad after to align values
  *   "longer":   value  <- colon at column 9, less pad needed
+ *   { key: "short",   next: 1 }  <- comma padded to align next key
+ *   { key: "longer",  next: 1 }
  *
  * For `=`, `&&`, `||` operators: Pad BEFORE the operator so OPERATORS align.
  *   passes   = sum(...)  <- operator at column 9
@@ -88,8 +96,8 @@ export function groupTokens(tokens: AlignmentToken[]): AlignmentGroup[] {
 function createGroup(tokens: AlignmentToken[]): AlignmentGroup {
   const operatorType = tokens[0].type;
 
-  // `:` pads after (values align), everything else pads before (operators align)
-  const padAfter = operatorType === ":";
+  // `:` and `,` pad after (values/next keys align), everything else pads before (operators align)
+  const padAfter = operatorType === ":" || operatorType === ",";
 
   let targetColumn: number;
 

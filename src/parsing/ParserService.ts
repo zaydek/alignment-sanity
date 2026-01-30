@@ -398,6 +398,44 @@ export class ParserService {
         return a.column - b.column;
       });
 
+      // Find inline objects and add comma tokens
+      // Group captures by line to detect lines with multiple colons from pairs
+      const colonsByLine = new Map<number, CaptureData[]>();
+      for (const data of captureData) {
+        if (data.type === ":" && data.parentType === "pair") {
+          if (!colonsByLine.has(data.line)) {
+            colonsByLine.set(data.line, []);
+          }
+          colonsByLine.get(data.line)!.push(data);
+        }
+      }
+
+      // For lines with 2+ colons from pairs (inline objects), find commas
+      for (const [lineNum, colons] of colonsByLine) {
+        if (colons.length < 2) continue;
+
+        // This is an inline object - find commas between pairs
+        const lineText = document.lineAt(lineNum).text;
+        const commaPositions = this.findInlineObjectCommas(lineText, colons);
+
+        for (const commaCol of commaPositions) {
+          captureData.push({
+            line: lineNum,
+            column: commaCol,
+            text: ",",
+            type: ",",
+            indent: colons[0].indent,
+            parentType: "inline_object", // Special parent type for inline object commas
+          });
+        }
+      }
+
+      // Re-sort after adding commas
+      captureData.sort((a, b) => {
+        if (a.line !== b.line) return a.line - b.line;
+        return a.column - b.column;
+      });
+
       // Second pass: assign token indices based on sorted order
       const tokens: AlignmentToken[] = [];
       const tokenCountByLine: Map<number, number> = new Map();
@@ -611,6 +649,98 @@ export class ParserService {
   }
 
   /**
+   * Finds commas between pairs in an inline object.
+   * Given colon positions, finds the commas that separate the value from the next key.
+   */
+  private findInlineObjectCommas(
+    lineText: string,
+    colons: { column: number }[],
+  ): number[] {
+    const commaPositions: number[] = [];
+
+    // Sort colons by column position
+    const sortedColons = [...colons].sort((a, b) => a.column - b.column);
+
+    // For each pair of adjacent colons, find the comma between them
+    for (let i = 0; i < sortedColons.length - 1; i++) {
+      const currentColonCol = sortedColons[i].column;
+      const nextColonCol = sortedColons[i + 1].column;
+
+      // Search for comma between current colon and next colon
+      const commaCol = this.findCommaBetween(
+        lineText,
+        currentColonCol + 1,
+        nextColonCol,
+      );
+      if (commaCol !== null) {
+        commaPositions.push(commaCol);
+      }
+    }
+
+    return commaPositions;
+  }
+
+  /**
+   * Finds the structural comma between two positions in a line.
+   * Handles strings and nested structures.
+   */
+  private findCommaBetween(
+    line: string,
+    startCol: number,
+    endCol: number,
+  ): number | null {
+    let inString = false;
+    let stringChar = "";
+    let escaped = false;
+    let depth = 0; // Track nested braces/brackets
+
+    for (let i = startCol; i < endCol && i < line.length; i++) {
+      const char = line[i];
+
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+
+      if (char === "\\" && inString) {
+        escaped = true;
+        continue;
+      }
+
+      if ((char === '"' || char === "'" || char === "`") && !inString) {
+        inString = true;
+        stringChar = char;
+        continue;
+      }
+
+      if (char === stringChar && inString) {
+        inString = false;
+        stringChar = "";
+        continue;
+      }
+
+      if (inString) continue;
+
+      // Track nesting
+      if (char === "{" || char === "[" || char === "(") {
+        depth++;
+        continue;
+      }
+      if (char === "}" || char === "]" || char === ")") {
+        depth--;
+        continue;
+      }
+
+      // Found a comma at top level
+      if (char === "," && depth === 0) {
+        return i;
+      }
+    }
+
+    return null;
+  }
+
+  /**
    * Checks if a node is inside a string or comment.
    */
   private isInsideStringOrComment(node: TreeNode): boolean {
@@ -645,6 +775,8 @@ export class ParserService {
         return "=";
       case ":":
         return ":";
+      case ",":
+        return ",";
       case "&&":
         return "&&";
       case "||":

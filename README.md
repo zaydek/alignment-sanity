@@ -18,8 +18,6 @@ debug = True                      debug   = True
 timeout = 30                      timeout = 30
 ```
 
-But there's a catch: inserting actual alignment spaces into your files causes problems.
-
 ## The Alignment Dilemma
 
 - **Noisy Git Diffs:** Change one variable name and you have to realign 10 other lines.
