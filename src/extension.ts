@@ -15,9 +15,6 @@ import { DecorationManager } from "./view/DecorationManager";
 /** Debounce delay in milliseconds */
 const DEBOUNCE_MS = 100;
 
-/** Number of lines to expand beyond visible range */
-const VISIBLE_RANGE_BUFFER = 20;
-
 let parserService: ParserService;
 let decorationManager: DecorationManager;
 let outputChannel: vscode.OutputChannel;
@@ -159,15 +156,6 @@ export async function activate(
   );
   context.subscriptions.push(documentChangeDisposable);
 
-  // Listen for visible range changes (scrolling)
-  const visibleRangeDisposable =
-    vscode.window.onDidChangeTextEditorVisibleRanges((event) => {
-      if (enabled) {
-        debouncedUpdate(event.textEditor);
-      }
-    });
-  context.subscriptions.push(visibleRangeDisposable);
-
   // Initial update for active editor
   if (vscode.window.activeTextEditor) {
     debouncedUpdate(vscode.window.activeTextEditor);
@@ -192,20 +180,9 @@ async function updateEditor(editor: vscode.TextEditor): Promise<void> {
     return;
   }
 
-  // Get visible range with buffer
-  const visibleRanges = editor.visibleRanges;
-  if (visibleRanges.length === 0) {
-    return;
-  }
-
-  const startLine = Math.max(
-    0,
-    visibleRanges[0].start.line - VISIBLE_RANGE_BUFFER,
-  );
-  const endLine = Math.min(
-    document.lineCount - 1,
-    visibleRanges[visibleRanges.length - 1].end.line + VISIBLE_RANGE_BUFFER,
-  );
+  // Process entire file
+  const startLine = 0;
+  const endLine = document.lineCount - 1;
 
   try {
     // Parse document to extract tokens
