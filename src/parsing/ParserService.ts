@@ -82,6 +82,12 @@ const QUERIES: Record<string, string> = {
       "=" @op
       right: (_))
 
+    ; Enum member assignments: Up = "up"
+    (enum_assignment
+      name: (_)
+      "=" @op
+      value: (_))
+
     ; Object properties: { key: value }
     (pair
       key: (_)
@@ -112,6 +118,12 @@ const QUERIES: Record<string, string> = {
       left: (_)
       "=" @op
       right: (_))
+
+    ; Enum member assignments: Up = "up"
+    (enum_assignment
+      name: (_)
+      "=" @op
+      value: (_))
 
     ; Object properties: { key: value }
     (pair
