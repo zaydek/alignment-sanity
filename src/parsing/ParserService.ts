@@ -407,6 +407,7 @@ export class ParserService {
         const indent = this.getIndentLevel(lineText);
 
         // For comments, only include trailing comments (code before the comment)
+        // Trailing comments use special grouping: ignore scopeId, use "trailing_comment" parentType
         if (operatorType === "//") {
           const column = node.startPosition.column;
           // Check if there's non-whitespace code before the comment
@@ -415,6 +416,19 @@ export class ParserService {
             // This is a standalone comment, not a trailing comment
             continue;
           }
+
+          // Trailing comments group by indent + consecutive lines only
+          // Use constant parentType and scopeId to bypass AST-based separation
+          captureData.push({
+            line,
+            column,
+            text: "//", // Normalize to just the marker for consistent alignment
+            type: operatorType,
+            indent,
+            parentType: "trailing_comment",
+            scopeId: "trailing_comment", // All trailing comments share the same scope
+          });
+          continue;
         }
 
         // Get parent type for structural grouping
@@ -947,6 +961,18 @@ export class ParserService {
             if (beforeComment.trim().length === 0) {
               continue;
             }
+
+            // Trailing comments group by indent + consecutive lines only
+            captureData.push({
+              line: docLine,
+              column,
+              text: "//",
+              type: operatorType,
+              indent,
+              parentType: "trailing_comment",
+              scopeId: `${blockScopeId}_trailing_comment`,
+            });
+            continue;
           }
 
           const parentType = this.getParentType(node);
