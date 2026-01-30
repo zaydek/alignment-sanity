@@ -2,7 +2,7 @@
   "name": "alignment-sanity",
   "displayName": "Alignment Sanity",
   "description": "Virtual alignment of = : && || and/or in TypeScript, TSX, JSON, YAML, and Python without modifying files",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -30,6 +30,14 @@
       {
         "command": "alignment-sanity.toggle",
         "title": "Alignment Sanity: Toggle"
+      },
+      {
+        "command": "alignment-sanity.enable",
+        "title": "Alignment Sanity: Enable"
+      },
+      {
+        "command": "alignment-sanity.disable",
+        "title": "Alignment Sanity: Disable"
       }
     ]
   },

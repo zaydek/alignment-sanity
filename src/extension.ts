@@ -106,6 +106,38 @@ export async function activate(
   );
   context.subscriptions.push(toggleCommand);
 
+  // Register enable command
+  const enableCommand = vscode.commands.registerCommand(
+    "alignment-sanity.enable",
+    () => {
+      if (!enabled) {
+        enabled = true;
+        updateStatusBar();
+        log("Enabled");
+        vscode.window.showInformationMessage("Alignment Sanity: Enabled");
+        if (vscode.window.activeTextEditor) {
+          debouncedUpdate(vscode.window.activeTextEditor);
+        }
+      }
+    },
+  );
+  context.subscriptions.push(enableCommand);
+
+  // Register disable command
+  const disableCommand = vscode.commands.registerCommand(
+    "alignment-sanity.disable",
+    () => {
+      if (enabled) {
+        enabled = false;
+        updateStatusBar();
+        log("Disabled");
+        vscode.window.showInformationMessage("Alignment Sanity: Disabled");
+        decorationManager.clearAll();
+      }
+    },
+  );
+  context.subscriptions.push(disableCommand);
+
   // Listen for active editor changes
   const activeEditorDisposable = vscode.window.onDidChangeActiveTextEditor(
     (editor) => {
@@ -185,7 +217,9 @@ async function updateEditor(editor: vscode.TextEditor): Promise<void> {
     // Update decorations
     decorationManager.update(editor, groups);
   } catch (error) {
-    log(`Update failed: ${error instanceof Error ? error.message : String(error)}`);
+    log(
+      `Update failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 }
 
