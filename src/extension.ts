@@ -173,9 +173,18 @@ async function updateEditor(editor: vscode.TextEditor): Promise<void> {
   }
 
   const document = editor.document;
+  const langId = document.languageId;
 
   // Check if language is supported
-  if (!isSupportedLanguage(document.languageId)) {
+  if (!isSupportedLanguage(langId)) {
+    decorationManager.clear(editor);
+    return;
+  }
+
+  // Check if language is enabled in settings
+  const config = vscode.workspace.getConfiguration("alignmentSanity");
+  const enabledLanguages = config.get<Record<string, boolean>>("enabledLanguages", {});
+  if (enabledLanguages[langId] === false) {
     decorationManager.clear(editor);
     return;
   }

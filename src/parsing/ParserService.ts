@@ -165,6 +165,13 @@ const QUERIES: Record<string, string> = {
     (boolean_operator
       operator: "or" @op)
   `,
+
+  css: `
+    ; CSS declarations: property: value
+    (declaration
+      (property_name)
+      ":" @op)
+  `,
 };
 
 /**
@@ -174,6 +181,7 @@ const WASM_FILES: Record<string, string> = {
   typescript: "tree-sitter-typescript.wasm",
   tsx: "tree-sitter-tsx.wasm",
   python: "tree-sitter-python.wasm",
+  css: "tree-sitter-css.wasm",
 };
 
 export class ParserService {

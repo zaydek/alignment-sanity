@@ -47,20 +47,29 @@ export type SupportedLanguage =
   | "json"
   | "jsonc"
   | "yaml"
-  | "python";
+  | "python"
+  | "css"
+  | "scss"
+  | "less";
+
+/** All supported languages for configuration */
+export const ALL_SUPPORTED_LANGUAGES: SupportedLanguage[] = [
+  "typescript",
+  "typescriptreact",
+  "json",
+  "jsonc",
+  "yaml",
+  "python",
+  "css",
+  "scss",
+  "less",
+];
 
 /** Check if a language ID is supported */
 export function isSupportedLanguage(
   langId: string,
 ): langId is SupportedLanguage {
-  return [
-    "typescript",
-    "typescriptreact",
-    "json",
-    "jsonc",
-    "yaml",
-    "python",
-  ].includes(langId);
+  return ALL_SUPPORTED_LANGUAGES.includes(langId as SupportedLanguage);
 }
 
 /** Map VS Code language IDs to parser language keys */
@@ -77,5 +86,9 @@ export function getParserLanguage(langId: SupportedLanguage): string {
       return "yaml";
     case "python":
       return "python";
+    case "css":
+    case "scss":
+    case "less":
+      return "css"; // CSS grammar handles all CSS-like languages
   }
 }

@@ -98,6 +98,7 @@ const config = {
 | **JSON / JSONC** | `.json`, `.jsonc` | `:` |
 | **YAML** | `.yaml`, `.yml` | `:` |
 | **Python** | `.py` | `=`, `:`, `and`, `or` |
+| **CSS / SCSS / Less** | `.css`, `.scss`, `.less` | `:` |
 
 ---
 
@@ -110,6 +111,30 @@ const config = {
 | **Disable** | Command Palette → `Alignment Sanity: Disable` |
 
 **Status Bar:** Look for the "✓ Align" / "✗ Align" indicator in the bottom right.
+
+---
+
+## Configuration
+
+You can enable or disable alignment for specific languages in your `settings.json`:
+
+```json
+{
+  "alignmentSanity.enabledLanguages": {
+    "typescript": true,
+    "typescriptreact": true,
+    "json": true,
+    "jsonc": true,
+    "yaml": true,
+    "python": true,
+    "css": true,
+    "scss": true,
+    "less": true
+  }
+}
+```
+
+Set any language to `false` to disable alignment for that language.
 
 ---
 
