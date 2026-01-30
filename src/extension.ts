@@ -20,7 +20,16 @@ const VISIBLE_RANGE_BUFFER = 20;
 
 let parserService: ParserService;
 let decorationManager: DecorationManager;
+let outputChannel: vscode.OutputChannel;
 let enabled = true;
+
+/**
+ * Logs a message to the output channel.
+ */
+function log(message: string): void {
+  const timestamp = new Date().toLocaleTimeString();
+  outputChannel.appendLine(`[${timestamp}] ${message}`);
+}
 
 /**
  * Activates the extension.
@@ -28,7 +37,11 @@ let enabled = true;
 export async function activate(
   context: vscode.ExtensionContext,
 ): Promise<void> {
-  console.log("Alignment Sanity: Activating...");
+  // Create output channel for logging
+  outputChannel = vscode.window.createOutputChannel("Alignment Sanity");
+  context.subscriptions.push(outputChannel);
+  
+  log("Activating...");
 
   // Initialize services
   parserService = new ParserService(context);
@@ -36,11 +49,12 @@ export async function activate(
 
   try {
     await parserService.initialize();
-    console.log("Alignment Sanity: Parser initialized");
+    log("Parser initialized successfully");
   } catch (error) {
-    console.error("Alignment Sanity: Failed to initialize parser:", error);
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    log(`Failed to initialize parser: ${errorMsg}`);
     vscode.window.showErrorMessage(
-      `Alignment Sanity: Failed to initialize. Error: ${error instanceof Error ? error.message : String(error)}`,
+      `Alignment Sanity: Failed to initialize. Error: ${errorMsg}`,
     );
     return;
   }
@@ -101,7 +115,7 @@ export async function activate(
     debouncedUpdate(vscode.window.activeTextEditor);
   }
 
-  console.log("Alignment Sanity: Activated");
+  log("Activated successfully");
 }
 
 /**
@@ -145,7 +159,7 @@ async function updateEditor(editor: vscode.TextEditor): Promise<void> {
     // Update decorations
     decorationManager.update(editor, groups);
   } catch (error) {
-    console.error("Alignment Sanity: Update failed:", error);
+    log(`Update failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
@@ -153,7 +167,9 @@ async function updateEditor(editor: vscode.TextEditor): Promise<void> {
  * Deactivates the extension.
  */
 export function deactivate(): void {
-  console.log("Alignment Sanity: Deactivating...");
+  if (outputChannel) {
+    log("Deactivating...");
+  }
 
   if (decorationManager) {
     decorationManager.dispose();
