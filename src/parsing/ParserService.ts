@@ -493,6 +493,13 @@ export class ParserService {
         return a.column - b.column;
       });
 
+      // Count operators per line for shape-based grouping
+      const operatorCountByLine = new Map<number, number>();
+      for (const data of captureData) {
+        const count = operatorCountByLine.get(data.line) ?? 0;
+        operatorCountByLine.set(data.line, count + 1);
+      }
+
       // Second pass: assign token indices based on sorted order
       const tokens: AlignmentToken[] = [];
       const tokenCountByLine: Map<number, number> = new Map();
@@ -504,6 +511,7 @@ export class ParserService {
         tokens.push({
           ...data,
           tokenIndex,
+          operatorCountOnLine: operatorCountByLine.get(data.line) ?? 1,
         });
       }
 
@@ -540,6 +548,7 @@ export class ParserService {
 
       // Find structural colons using state machine
       const colonPositions = this.findJsonColons(lineText);
+      const operatorCountOnLine = colonPositions.length;
 
       for (const colonIndex of colonPositions) {
         const tokenIndex = tokenCountByLine.get(lineNum) ?? 0;
@@ -557,6 +566,7 @@ export class ParserService {
           parentType: "pair",
           tokenIndex,
           scopeId,
+          operatorCountOnLine,
         });
       }
     }
@@ -644,6 +654,7 @@ export class ParserService {
       // Match: word characters (and some special chars) followed by colon
       // Avoid matching URLs (http://, https://) by checking what follows
       const colonPositions = this.findYamlColons(lineText);
+      const operatorCountOnLine = colonPositions.length;
 
       for (const colonIndex of colonPositions) {
         const tokenIndex = tokenCountByLine.get(lineNum) ?? 0;
@@ -661,6 +672,7 @@ export class ParserService {
           parentType: "pair",
           tokenIndex,
           scopeId,
+          operatorCountOnLine,
         });
       }
     }
@@ -838,6 +850,7 @@ export class ParserService {
         const docLine = lineOffset + i;
         const colonPositions = this.findJsonColons(lineText);
         const indent = this.getIndentLevel(lineText);
+        const operatorCountOnLine = colonPositions.length;
 
         for (const colonPos of colonPositions) {
           const tokenIndex = tokenCountByLine.get(docLine) ?? 0;
@@ -855,6 +868,7 @@ export class ParserService {
             parentType: "pair",
             tokenIndex,
             scopeId,
+            operatorCountOnLine,
           });
         }
       }
@@ -880,6 +894,8 @@ export class ParserService {
           continue;
         }
 
+        const operatorCountOnLine = colonPositions.length;
+
         for (const colonPos of colonPositions) {
           const tokenIndex = tokenCountByLine.get(docLine) ?? 0;
           tokenCountByLine.set(docLine, tokenIndex + 1);
@@ -896,6 +912,7 @@ export class ParserService {
             parentType: "pair",
             tokenIndex,
             scopeId,
+            operatorCountOnLine,
           });
         }
       }
@@ -1029,6 +1046,13 @@ export class ParserService {
           return a.column - b.column;
         });
 
+        // Count operators per line for shape-based grouping
+        const operatorCountByLine = new Map<number, number>();
+        for (const data of captureData) {
+          const count = operatorCountByLine.get(data.line) ?? 0;
+          operatorCountByLine.set(data.line, count + 1);
+        }
+
         const tokenCountByLine: Map<number, number> = new Map();
         for (const data of captureData) {
           const tokenIndex = tokenCountByLine.get(data.line) ?? 0;
@@ -1037,6 +1061,7 @@ export class ParserService {
           tokens.push({
             ...data,
             tokenIndex,
+            operatorCountOnLine: operatorCountByLine.get(data.line) ?? 1,
           });
         }
 

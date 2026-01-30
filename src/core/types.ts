@@ -24,6 +24,8 @@ export interface AlignmentToken {
   tokenIndex: number;
   /** Scope identifier - tokens must be in the same scope to align */
   scopeId: string;
+  /** Total number of operators on this line (for shape-based grouping) */
+  operatorCountOnLine: number;
 }
 
 /** A group of tokens that should be aligned together */

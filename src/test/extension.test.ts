@@ -17,6 +17,7 @@ function token(
     parentType?: string;
     tokenIndex?: number;
     scopeId?: string;
+    operatorCountOnLine?: number;
   },
 ): AlignmentToken {
   return {
@@ -28,6 +29,7 @@ function token(
     parentType: opts?.parentType ?? "pair",
     tokenIndex: opts?.tokenIndex ?? 0,
     scopeId: opts?.scopeId ?? "default_scope",
+    operatorCountOnLine: opts?.operatorCountOnLine ?? 1,
   };
 }
 
