@@ -60,37 +60,37 @@ _Aligns keys at the same indentation level. Nested blocks form separate alignmen
 
 **Package Configuration** (JSON)
 
-```json
+```
 {
-  "name": "enterprise-dashboard",
-  "version": "2.4.0",
+  "name":        "enterprise-dashboard",
+  "version":     "2.4.0",
   "description": "Real-time analytics platform",
-  "main": "dist/server.js",
-  "license": "MIT"
+  "main":        "dist/server.js",
+  "license":     "MIT"
 }
 ```
 
 **Nested Structures** (YAML)
 
-```yaml
+```
 # Each indentation level aligns independently
 spec:
   replicas: 3
   strategy: RollingUpdate
   selector:
-    app: backend # Nested group - aligns separately
+    app:  backend    # Nested group - aligns separately
     tier: production
 ```
 
 **Type Definitions** (TypeScript)
 
-```typescript
+```
 interface UserProfile {
-  id: string;
-  email: string;
+  id:          string;
+  email:       string;
   displayName: string;
-  avatarUrl: string | null;
-  isVerified: boolean;
+  avatarUrl:   string | null;
+  isVerified:  boolean;
 }
 ```
 
@@ -110,21 +110,24 @@ API_TIMEOUT  = int(os.getenv("API_TIMEOUT", "30"))
 
 **Conditional Classes** (TSX / React)
 
-```tsx
+```
 const buttonClasses = clsx(
   "px-4 py-2 rounded transition-all",
-  isPrimary && "bg-blue-600 text-white hover:bg-blue-700",
+  isPrimary   && "bg-blue-600 text-white hover:bg-blue-700",
   isSecondary && "bg-gray-100 text-gray-900 hover:bg-gray-200",
-  isLoading && "opacity-75 cursor-wait",
-  isDisabled && "opacity-50 pointer-events-none",
+  isLoading   && "opacity-75 cursor-wait",
+  isDisabled  && "opacity-50 pointer-events-none",
 );
 ```
 
 **Guard Clauses** (TypeScript)
 
-```typescript
+```
 const canSubmit =
-  isFormValid && !isSubmitting && hasAgreedToTerms && (hasCredit || isFreeTier);
+  isFormValid      &&
+  !isSubmitting    &&
+  hasAgreedToTerms &&
+  (hasCredit || isFreeTier);
 ```
 
 ### Styling & Theming
@@ -133,32 +136,32 @@ _Create clean, readable style definitions and token maps._
 
 **Component Styles** (CSS)
 
-```css
+```
 .card {
-  position: relative;
-  display: flex;
+  position:       relative;
+  display:        flex;
   flex-direction: column;
-  padding: 1.5rem;
-  border-radius: 0.5rem;
+  padding:        1.5rem;
+  border-radius:  0.5rem;
 }
 ```
 
 **Design Tokens** (SCSS)
 
-```scss
+```
 $color-primary: #3b82f6;
-$color-danger: #ef4444;
+$color-danger:  #ef4444;
 $color-success: #22c55e;
-$spacing-unit: 0.25rem;
+$spacing-unit:  0.25rem;
 ```
 
 **Responsive Breakpoints** (Less)
 
-```less
-@screen-sm: 640px;
-@screen-md: 768px;
-@screen-lg: 1024px;
-@screen-xl: 1280px;
+```
+@screen-sm:     640px;
+@screen-md:     768px;
+@screen-lg:     1024px;
+@screen-xl:     1280px;
 @container-max: 1440px;
 ```
 
