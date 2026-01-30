@@ -1,6 +1,6 @@
 # Alignment Sanity
 
-**The readability of vertical alignment. The cleanliness of zero git diffs.**
+**Read tens of thousands of lines of code. Not one line at a time.**
 
 [![VS Code](https://img.shields.io/badge/VS%20Code-Compatible-blue?logo=visualstudiocode)](https://marketplace.visualstudio.com/)
 [![Cursor](https://img.shields.io/badge/Cursor-Compatible-purple)](https://cursor.sh/)
@@ -8,29 +8,39 @@
 
 ---
 
-**Alignment Sanity** gives you perfectly aligned code **without polluting your git history**. Using VS Code's decoration API, alignment is rendered purely visually—your files stay exactly as they are on disk.
+## The Glanceability Problem
 
-![Alignment Sanity Demo](images/tutorial.gif)
+Professional developers don't read code line by line—they *scan* it. When you're reviewing PRs, debugging production issues, or onboarding onto a new codebase, you need to process tens of thousands of lines per day. The difference between readable code and scannable code is the difference between understanding a system in minutes versus hours.
 
-## The Problem
+**Vertical alignment is one of the most powerful tools for glanceability.** It turns walls of text into structured data that your eyes can parse instantly:
 
-Vertical alignment makes code easier to scan, but inserting actual spaces causes issues:
+```python
+# Hard to scan                    # Easy to scan
+name = "app"                      name    = "app"
+version = "1.0.0"                 version = "1.0.0"
+debug = True                      debug   = True
+timeout = 30                      timeout = 30
+```
 
-- **Noisy Git Diffs:** Changing one variable name forces you to realign 10 other lines.
-- **Formatter Conflicts:** Prettier, Black, and other formatters fight against manual alignment.
-- **Team Friction:** "To align or not to align" becomes a debate.
+But there's a catch: inserting actual alignment spaces into your files causes problems.
+
+## The Alignment Dilemma
+
+- **Noisy Git Diffs:** Change one variable name and you have to realign 10 other lines.
+- **Formatter Wars:** Prettier, Black, and gofmt all have opinions. Manual alignment gets destroyed.
+- **Team Friction:** "Should we align or not?" becomes an endless debate.
 
 ## The Solution
 
-Alignment Sanity renders alignment **visually** while keeping your files untouched.
+**Alignment Sanity** renders alignment **visually** without touching your files. Your code looks perfectly aligned in the editor, but the file on disk stays exactly as your formatter left it.
 
-| What You See (Virtual) | What Is Saved (Disk) |
+| What You See (Editor) | What Is Saved (Disk) |
 | :--- | :--- |
 | `name:    "app"` | `name: "app"` |
 | `version: "1.0"` | `version: "1.0"` |
 | `debug:   true` | `debug: true` |
 
-**Your git diff:** Clean. Zero changes.
+**Your git diff:** Clean. Zero alignment noise. Just the actual changes.
 
 ---
 
