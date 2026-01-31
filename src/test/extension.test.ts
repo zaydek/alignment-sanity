@@ -1350,6 +1350,86 @@ suite("Trailing Comment Alignment Tests", () => {
     assert.strictEqual(groups[0].padAfter, false, "Comments should pad before");
   });
 
+  test("trailing comments with DIFFERENT tokenIndex values still group", () => {
+    // This tests a critical bug: lines with different numbers of operators
+    // have different tokenIndex values for their trailing comments.
+    //
+    // Example type definition:
+    //   open:              boolean; // comment                    <- 2 ops (: //), tokenIndex=1
+    //   onOpenChange:      (open: boolean) => void; // comment    <- 3 ops (: => //), tokenIndex=2
+    //   secondaryAction?:  { label: string; onClick?: () => void }; // comment <- 5 ops, tokenIndex=4
+    //
+    // The bug: tokenIndex was used in the grouping key, so comments ended up
+    // in different buckets based on how many operators preceded them.
+    const tokens: AlignmentToken[] = [
+      // Line 1: simple type - 2 operators (: and //)
+      token(1, 12, ":", ":", {
+        indent: 2,
+        parentType: "pair",
+        tokenIndex: 0,
+        scopeId: "type_1",
+        operatorCountOnLine: 2,
+      }),
+      token(1, 22, "//", "//", {
+        indent: 2,
+        parentType: "trailing_comment",
+        tokenIndex: 1, // Second operator
+        scopeId: "trailing_comment",
+        operatorCountOnLine: 2,
+      }),
+      // Line 2: function type - 3 operators (: => //)
+      token(2, 15, ":", ":", {
+        indent: 2,
+        parentType: "pair",
+        tokenIndex: 0,
+        scopeId: "type_1",
+        operatorCountOnLine: 3,
+      }),
+      token(2, 45, "//", "//", {
+        indent: 2,
+        parentType: "trailing_comment",
+        tokenIndex: 2, // Third operator (different from line 1!)
+        scopeId: "trailing_comment",
+        operatorCountOnLine: 3,
+      }),
+      // Line 3: inline object type - 5 operators (: : => : //)
+      token(3, 18, ":", ":", {
+        indent: 2,
+        parentType: "pair",
+        tokenIndex: 0,
+        scopeId: "type_1",
+        operatorCountOnLine: 5,
+      }),
+      token(3, 60, "//", "//", {
+        indent: 2,
+        parentType: "trailing_comment",
+        tokenIndex: 4, // Fifth operator (very different!)
+        scopeId: "trailing_comment",
+        operatorCountOnLine: 5,
+      }),
+    ];
+
+    const groups = groupTokens(tokens);
+
+    // Find comment groups
+    const commentGroups = groups.filter((g) => g.tokens[0].type === "//");
+
+    // Should have exactly 1 comment group with all 3 comments
+    assert.strictEqual(commentGroups.length, 1, "Should have 1 comment group");
+    assert.strictEqual(
+      commentGroups[0].tokens.length,
+      3,
+      "Comment group should have all 3 comments despite different tokenIndex values",
+    );
+
+    // Target should be the max column (60)
+    assert.strictEqual(
+      commentGroups[0].targetColumn,
+      60,
+      "Target should be rightmost comment column",
+    );
+  });
+
   test("trailing comments with operatorCountOnLine > 1 still group (THE BUG FIX)", () => {
     // This tests the critical bug: when a line has multiple operators (like = and //),
     // the inline object isolation logic was incorrectly isolating each comment by line.
