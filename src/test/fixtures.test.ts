@@ -1,10 +1,11 @@
 /**
- * Fixture-based declarative tests v2 - Uses real parser.
+ * Fixture-based declarative tests - Uses real parser.
  *
- * Each fixture folder contains:
- * - input.txt: Source code
- * - expected.txt: Expected alignment output (visual format with · for spaces)
- * - config.txt: Language configuration (languageId: typescript)
+ * Each fixture folder contains a pair of files:
+ * - input.{lang}.txt: Source code (e.g., input.ts.txt, input.json.txt)
+ * - expected.{lang}.txt: Expected alignment output with · for padding
+ *
+ * The language is extracted from the filename extension.
  */
 
 import * as assert from "assert";
@@ -20,18 +21,52 @@ const FIXTURES_DIR = path.join(__dirname, "..", "..", "src", "test", "fixtures")
 // Shared parser instance (initialized once)
 let parserService: ParserService | null = null;
 
+// Map file extensions to VSCode language IDs
+const EXT_TO_LANG: Record<string, string> = {
+  ts: "typescript",
+  tsx: "typescriptreact",
+  js: "javascript",
+  jsx: "javascriptreact",
+  json: "json",
+  jsonc: "jsonc",
+  yaml: "yaml",
+  yml: "yaml",
+  py: "python",
+  css: "css",
+  scss: "scss",
+  less: "less",
+  md: "markdown",
+};
+
 /**
- * Parse config.txt to get languageId.
+ * Find input/expected file pair in a fixture directory.
+ * Returns { inputPath, expectedPath, languageId } or null if not found.
  */
-function parseConfig(content: string): { languageId: string } {
-  const lines = content.split("\n");
-  for (const line of lines) {
-    const match = line.match(/^languageId:\s*(\S+)/);
+function findFixtureFiles(
+  dir: string
+): { inputPath: string; expectedPath: string; languageId: string } | null {
+  const files = fs.readdirSync(dir);
+
+  // Look for input.{lang}.txt pattern
+  for (const file of files) {
+    const match = file.match(/^input\.(\w+)\.txt$/);
     if (match) {
-      return { languageId: match[1] };
+      const ext = match[1];
+      const expectedFile = `expected.${ext}.txt`;
+      const expectedPath = path.join(dir, expectedFile);
+
+      if (fs.existsSync(expectedPath)) {
+        const languageId = EXT_TO_LANG[ext] || ext;
+        return {
+          inputPath: path.join(dir, file),
+          expectedPath,
+          languageId,
+        };
+      }
     }
   }
-  return { languageId: "typescript" }; // default
+
+  return null;
 }
 
 /**
@@ -100,8 +135,18 @@ function applyAlignment(
 /**
  * Collect all fixture directories.
  */
-function collectFixtures(): string[] {
-  const fixtures: string[] = [];
+function collectFixtures(): Array<{
+  dir: string;
+  inputPath: string;
+  expectedPath: string;
+  languageId: string;
+}> {
+  const fixtures: Array<{
+    dir: string;
+    inputPath: string;
+    expectedPath: string;
+    languageId: string;
+  }> = [];
 
   function walk(dir: string): void {
     if (!fs.existsSync(dir)) {
@@ -112,12 +157,10 @@ function collectFixtures(): string[] {
     for (const entry of entries) {
       if (entry.isDirectory()) {
         const subdir = path.join(dir, entry.name);
-        // Check if this is a fixture (has input.txt and expected.txt)
-        if (
-          fs.existsSync(path.join(subdir, "input.txt")) &&
-          fs.existsSync(path.join(subdir, "expected.txt"))
-        ) {
-          fixtures.push(subdir);
+        const fixtureFiles = findFixtureFiles(subdir);
+
+        if (fixtureFiles) {
+          fixtures.push({ dir: subdir, ...fixtureFiles });
         } else {
           walk(subdir);
         }
@@ -159,7 +202,8 @@ suite("Fixture Tests", () => {
         get: () => Promise.resolve(undefined),
         store: () => Promise.resolve(),
         delete: () => Promise.resolve(),
-        onDidChange: new vscode.EventEmitter<vscode.SecretStorageChangeEvent>().event,
+        onDidChange: new vscode.EventEmitter<vscode.SecretStorageChangeEvent>()
+          .event,
       },
       extension: {} as vscode.Extension<unknown>,
     } as unknown as vscode.ExtensionContext;
@@ -178,25 +222,17 @@ suite("Fixture Tests", () => {
 
   const fixtures = collectFixtures();
 
-  for (const fixtureDir of fixtures) {
-    const fixtureName = path.relative(FIXTURES_DIR, fixtureDir);
+  for (const fixture of fixtures) {
+    const fixtureName = path.relative(FIXTURES_DIR, fixture.dir);
 
     test(fixtureName, async () => {
-      // Read fixture files
-      const inputPath = path.join(fixtureDir, "input.txt");
-      const expectedPath = path.join(fixtureDir, "expected.txt");
-      const configPath = path.join(fixtureDir, "config.txt");
-
-      const inputContent = fs.readFileSync(inputPath, "utf-8");
-      const expectedContent = fs.readFileSync(expectedPath, "utf-8");
-      const config = fs.existsSync(configPath)
-        ? parseConfig(fs.readFileSync(configPath, "utf-8"))
-        : { languageId: "typescript" };
+      const inputContent = fs.readFileSync(fixture.inputPath, "utf-8");
+      const expectedContent = fs.readFileSync(fixture.expectedPath, "utf-8");
 
       // Create a virtual document
       const doc = await vscode.workspace.openTextDocument({
         content: inputContent,
-        language: config.languageId,
+        language: fixture.languageId,
       });
 
       // Parse document
