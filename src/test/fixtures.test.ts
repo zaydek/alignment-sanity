@@ -2,10 +2,15 @@
  * Fixture-based declarative tests - Uses real parser.
  *
  * Each fixture folder contains a pair of files:
- * - input.{lang}.txt: Source code (e.g., input.ts.txt, input.json.txt)
+ * - input.{lang}: Source code with syntax highlighting (e.g., input.ts, input.json)
  * - expected.{lang}.txt: Expected alignment output with · for padding
  *
- * The language is extracted from the filename extension.
+ * The language is extracted from the input filename extension.
+ * Input files use real extensions for syntax highlighting.
+ * Expected files use .txt to avoid editor errors from · characters.
+ *
+ * Run with UPDATE_SNAPSHOTS=1 to auto-generate expected files:
+ *   UPDATE_SNAPSHOTS=1 npm test
  */
 
 import * as assert from "assert";
@@ -17,6 +22,12 @@ import { ParserService } from "../parsing/ParserService";
 
 // Path to fixtures (src/test/fixtures from project root)
 const FIXTURES_DIR = path.join(__dirname, "..", "..", "src", "test", "fixtures");
+
+// Enable snapshot updates via environment variable
+const UPDATE_SNAPSHOTS = process.env.UPDATE_SNAPSHOTS === "1";
+
+// Padding character for visual alignment markers
+const PAD = "·";
 
 // Shared parser instance (initialized once)
 let parserService: ParserService | null = null;
@@ -40,6 +51,9 @@ const EXT_TO_LANG: Record<string, string> = {
 
 /**
  * Find input/expected file pair in a fixture directory.
+ * Input: input.{lang} (e.g., input.ts) - real extension for syntax highlighting
+ * Expected: expected.{lang}.txt (e.g., expected.ts.txt) - .txt to avoid editor errors
+ *
  * Returns { inputPath, expectedPath, languageId } or null if not found.
  */
 function findFixtureFiles(
@@ -47,18 +61,20 @@ function findFixtureFiles(
 ): { inputPath: string; expectedPath: string; languageId: string } | null {
   const files = fs.readdirSync(dir);
 
-  // Look for input.{lang}.txt pattern
+  // Look for input.{lang} pattern (no .txt suffix for syntax highlighting)
   for (const file of files) {
-    const match = file.match(/^input\.(\w+)\.txt$/);
+    const match = file.match(/^input\.(\w+)$/);
     if (match) {
       const ext = match[1];
+      const inputPath = path.join(dir, file);
       const expectedFile = `expected.${ext}.txt`;
       const expectedPath = path.join(dir, expectedFile);
 
-      if (fs.existsSync(expectedPath)) {
+      // In UPDATE_SNAPSHOTS mode, expected file doesn't need to exist yet
+      if (fs.existsSync(expectedPath) || UPDATE_SNAPSHOTS) {
         const languageId = EXT_TO_LANG[ext] || ext;
         return {
-          inputPath: path.join(dir, file),
+          inputPath,
           expectedPath,
           languageId,
         };
@@ -123,7 +139,7 @@ function applyAlignment(
     for (const { column, spaces } of linePaddings) {
       const before = line.slice(0, column);
       const after = line.slice(column);
-      line = before + "·".repeat(spaces) + after;
+      line = before + PAD.repeat(spaces) + after;
     }
 
     result.push(line);
@@ -227,7 +243,6 @@ suite("Fixture Tests", () => {
 
     test(fixtureName, async () => {
       const inputContent = fs.readFileSync(fixture.inputPath, "utf-8");
-      const expectedContent = fs.readFileSync(fixture.expectedPath, "utf-8");
 
       // Create a virtual document
       const doc = await vscode.workspace.openTextDocument({
@@ -246,10 +261,29 @@ suite("Fixture Tests", () => {
       const actualLines = applyAlignment(sourceLines, groups);
       const actual = actualLines.join("\n");
 
-      // Compare to expected
+      // UPDATE_SNAPSHOTS mode: write actual to expected file
+      if (UPDATE_SNAPSHOTS) {
+        fs.writeFileSync(fixture.expectedPath, actual);
+        console.log(`Updated snapshot: ${fixture.expectedPath}`);
+        return;
+      }
+
+      // Normal mode: compare to expected
+      if (!fs.existsSync(fixture.expectedPath)) {
+        assert.fail(
+          `Snapshot missing for ${fixtureName}. Run with UPDATE_SNAPSHOTS=1 to create.`
+        );
+      }
+
+      const expectedContent = fs.readFileSync(fixture.expectedPath, "utf-8");
+
+      // Normalize line endings for cross-platform compatibility
+      const normalizedActual = actual.replace(/\r\n/g, "\n");
+      const normalizedExpected = expectedContent.replace(/\r\n/g, "\n");
+
       assert.strictEqual(
-        actual,
-        expectedContent,
+        normalizedActual,
+        normalizedExpected,
         `Fixture ${fixtureName} failed.\n\nActual:\n${actual}\n\nExpected:\n${expectedContent}`
       );
     });
