@@ -1,67 +1,47 @@
 /**
- * Fixture-based declarative tests for alignment.
+ * Fixture-based declarative tests v2 - Uses real parser.
  *
  * Each fixture folder contains:
- * - input.txt: Source code (for documentation)
- * - tokens.txt: Token definitions to test
+ * - input.txt: Source code
  * - expected.txt: Expected alignment output (visual format with · for spaces)
- * - config.txt: Optional configuration
+ * - config.txt: Language configuration (languageId: typescript)
  */
 
 import * as assert from "assert";
 import * as fs from "fs";
 import * as path from "path";
-import { AlignmentToken, OperatorType } from "../core/types";
+import * as vscode from "vscode";
 import { groupTokens } from "../logic/Grouper";
+import { ParserService } from "../parsing/ParserService";
 
-// __dirname is out/test at runtime, but fixtures are in src/test
-// Go up two levels (out/test -> out -> root) then into src/test/fixtures
+// Path to fixtures (src/test/fixtures from project root)
 const FIXTURES_DIR = path.join(__dirname, "..", "..", "src", "test", "fixtures");
 
+// Shared parser instance (initialized once)
+let parserService: ParserService | null = null;
+
 /**
- * Parse tokens from a tokens.txt file.
- * Format: line, column, "text", type, indent, parentType, tokenIndex, scopeId
+ * Parse config.txt to get languageId.
  */
-function parseTokensFile(content: string): AlignmentToken[] {
-  const tokens: AlignmentToken[] = [];
+function parseConfig(content: string): { languageId: string } {
   const lines = content.split("\n");
-
   for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-
-    // Parse CSV-like format: 0, 8, "=", =, 0, variable_declaration, 0, scope_1
-    const match = trimmed.match(
-      /^(\d+),\s*(\d+),\s*"([^"]+)",\s*(\S+),\s*(\d+),\s*(\S+),\s*(\d+),\s*(\S+)$/
-    );
-    if (!match) {
-      console.warn(`Skipping invalid line: ${trimmed}`);
-      continue;
+    const match = line.match(/^languageId:\s*(\S+)/);
+    if (match) {
+      return { languageId: match[1] };
     }
-
-    const [, lineNum, column, text, type, indent, parentType, tokenIndex, scopeId] = match;
-
-    tokens.push({
-      line: parseInt(lineNum, 10),
-      column: parseInt(column, 10),
-      text,
-      type: type as OperatorType,
-      indent: parseInt(indent, 10),
-      parentType,
-      tokenIndex: parseInt(tokenIndex, 10),
-      scopeId,
-      operatorCountOnLine: 1,
-    });
   }
-
-  return tokens;
+  return { languageId: "typescript" }; // default
 }
 
 /**
  * Apply alignment groups to source lines to produce visual output.
  * Uses · to represent virtual padding spaces.
  */
-function applyAlignment(sourceLines: string[], groups: ReturnType<typeof groupTokens>): string[] {
+function applyAlignment(
+  sourceLines: string[],
+  groups: ReturnType<typeof groupTokens>
+): string[] {
   // Track padding to add at each (line, column) position
   const paddingMap = new Map<string, number>();
 
@@ -93,8 +73,8 @@ function applyAlignment(sourceLines: string[], groups: ReturnType<typeof groupTo
   const result: string[] = [];
   for (let lineIdx = 0; lineIdx < sourceLines.length; lineIdx++) {
     let line = sourceLines[lineIdx];
-    
-    // Collect all padding for this line, sorted by column (descending to avoid offset issues)
+
+    // Collect all padding for this line, sorted by column (descending)
     const linePaddings: Array<{ column: number; spaces: number }> = [];
     for (const [key, spaces] of paddingMap) {
       const [l, c] = key.split(":").map(Number);
@@ -104,7 +84,7 @@ function applyAlignment(sourceLines: string[], groups: ReturnType<typeof groupTo
     }
     linePaddings.sort((a, b) => b.column - a.column);
 
-    // Insert padding (from right to left to preserve column positions)
+    // Insert padding (from right to left)
     for (const { column, spaces } of linePaddings) {
       const before = line.slice(0, column);
       const after = line.slice(column);
@@ -124,14 +104,19 @@ function collectFixtures(): string[] {
   const fixtures: string[] = [];
 
   function walk(dir: string): void {
-    if (!fs.existsSync(dir)) return;
-    
+    if (!fs.existsSync(dir)) {
+      return;
+    }
+
     const entries = fs.readdirSync(dir, { withFileTypes: true });
     for (const entry of entries) {
       if (entry.isDirectory()) {
         const subdir = path.join(dir, entry.name);
-        // Check if this is a fixture (has tokens.txt)
-        if (fs.existsSync(path.join(subdir, "tokens.txt"))) {
+        // Check if this is a fixture (has input.txt and expected.txt)
+        if (
+          fs.existsSync(path.join(subdir, "input.txt")) &&
+          fs.existsSync(path.join(subdir, "expected.txt"))
+        ) {
           fixtures.push(subdir);
         } else {
           walk(subdir);
@@ -145,23 +130,77 @@ function collectFixtures(): string[] {
 }
 
 suite("Fixture Tests", () => {
+  // Initialize parser before all tests
+  suiteSetup(async () => {
+    // Create a mock extension context
+    const mockContext = {
+      extensionPath: path.join(__dirname, "..", ".."),
+      subscriptions: [],
+      workspaceState: {
+        get: () => undefined,
+        update: () => Promise.resolve(),
+      },
+      globalState: {
+        get: () => undefined,
+        update: () => Promise.resolve(),
+        setKeysForSync: () => {},
+      },
+      extensionUri: vscode.Uri.file(path.join(__dirname, "..", "..")),
+      storageUri: undefined,
+      globalStorageUri: vscode.Uri.file("/tmp"),
+      logUri: vscode.Uri.file("/tmp"),
+      extensionMode: vscode.ExtensionMode.Test,
+      storagePath: undefined,
+      globalStoragePath: "/tmp",
+      logPath: "/tmp",
+      asAbsolutePath: (p: string) => path.join(__dirname, "..", "..", p),
+      environmentVariableCollection: {} as vscode.GlobalEnvironmentVariableCollection,
+      secrets: {
+        get: () => Promise.resolve(undefined),
+        store: () => Promise.resolve(),
+        delete: () => Promise.resolve(),
+        onDidChange: new vscode.EventEmitter<vscode.SecretStorageChangeEvent>().event,
+      },
+      extension: {} as vscode.Extension<unknown>,
+    } as unknown as vscode.ExtensionContext;
+
+    parserService = new ParserService(mockContext);
+    await parserService.initialize();
+  });
+
+  // Dispose parser after all tests
+  suiteTeardown(() => {
+    if (parserService) {
+      parserService.dispose();
+      parserService = null;
+    }
+  });
+
   const fixtures = collectFixtures();
 
   for (const fixtureDir of fixtures) {
     const fixtureName = path.relative(FIXTURES_DIR, fixtureDir);
 
-    test(fixtureName, () => {
+    test(fixtureName, async () => {
       // Read fixture files
-      const tokensPath = path.join(fixtureDir, "tokens.txt");
       const inputPath = path.join(fixtureDir, "input.txt");
       const expectedPath = path.join(fixtureDir, "expected.txt");
+      const configPath = path.join(fixtureDir, "config.txt");
 
-      const tokensContent = fs.readFileSync(tokensPath, "utf-8");
       const inputContent = fs.readFileSync(inputPath, "utf-8");
       const expectedContent = fs.readFileSync(expectedPath, "utf-8");
+      const config = fs.existsSync(configPath)
+        ? parseConfig(fs.readFileSync(configPath, "utf-8"))
+        : { languageId: "typescript" };
 
-      // Parse tokens
-      const tokens = parseTokensFile(tokensContent);
+      // Create a virtual document
+      const doc = await vscode.workspace.openTextDocument({
+        content: inputContent,
+        language: config.languageId,
+      });
+
+      // Parse document
+      const tokens = await parserService!.parse(doc, 0, doc.lineCount - 1);
 
       // Group tokens
       const groups = groupTokens(tokens);
@@ -172,12 +211,10 @@ suite("Fixture Tests", () => {
       const actual = actualLines.join("\n");
 
       // Compare to expected
-      const expected = expectedContent;
-
       assert.strictEqual(
         actual,
-        expected,
-        `Fixture ${fixtureName} failed.\n\nActual:\n${actual}\n\nExpected:\n${expected}`
+        expectedContent,
+        `Fixture ${fixtureName} failed.\n\nActual:\n${actual}\n\nExpected:\n${expectedContent}`
       );
     });
   }
