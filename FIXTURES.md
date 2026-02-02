@@ -19,6 +19,7 @@ The before shows source code. The after shows the same code with `·` marking wh
 Fixtures are the **primary** testing approach. If alignment behavior can be expressed as "given this input, expect this output," it belongs in a fixture—not in imperative test code.
 
 Imperative tests are a **last resort** for things that genuinely cannot be expressed as before/after:
+
 - Internal function unit tests (e.g., edge cases in `groupTokens()`)
 - Error handling and exception paths
 - State management logic
@@ -45,6 +46,7 @@ src/test/fixtures/
 ```
 
 Examples:
+
 - `before.ts.txt` / `after.ts.txt` for TypeScript
 - `before.json.txt` / `after.json.txt` for JSON
 - `before.yaml.txt` / `after.yaml.txt` for YAML
@@ -124,14 +126,14 @@ The test runner (`src/test/fixtures.test.ts`):
 
 ## Language Support
 
-| Extension | Language ID |
-|-----------|-------------|
-| `.ts.txt` | typescript |
-| `.tsx.txt` | typescriptreact |
-| `.json.txt` | json |
-| `.yaml.txt` | yaml |
-| `.py.txt` | python |
-| `.css.txt` | css |
+| Extension   | Language ID     |
+| ----------- | --------------- |
+| `.ts.txt`   | typescript      |
+| `.tsx.txt`  | typescriptreact |
+| `.json.txt` | json            |
+| `.yaml.txt` | yaml            |
+| `.py.txt`   | python          |
+| `.css.txt`  | css             |
 
 ## Why `.txt` for Both Files?
 
@@ -143,11 +145,13 @@ The test runner (`src/test/fixtures.test.ts`):
 ## Relationship to Imperative Tests
 
 Fixtures are the **primary** testing approach:
+
 - Test the full pipeline (parser → grouper → alignment)
 - Cover all alignment scenarios that users care about
 - Serve as documentation of expected behavior
 
 Imperative tests (`src/test/suites/*.test.ts`) are **secondary**:
+
 - Only for internal logic that can't be shown as before/after
 - Examples: grouper bucket logic, error handling, edge cases in helper functions
 - Should be minimal—if you can express it as a fixture, do that instead

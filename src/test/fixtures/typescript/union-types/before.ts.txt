@@ -1,0 +1,4 @@
+type Action =
+  | { type: ActionType.SelectCell; coordinate: CellIndex }
+  | { type: ActionType.ExtendSelection; to: CellIndex }
+  | { type: ActionType.LoadData; rows: CellValue[][] };

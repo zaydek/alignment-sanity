@@ -1,0 +1,3 @@
+const tokens: AlignmentToken[] = [];
+const groups: AlignmentGroup[] = [];
+const result: Map<string, number> = new Map();

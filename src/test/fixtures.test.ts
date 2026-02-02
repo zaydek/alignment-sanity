@@ -20,7 +20,14 @@ import { groupTokens } from "../logic/Grouper";
 import { ParserService } from "../parsing/ParserService";
 
 // Path to fixtures (src/test/fixtures from project root)
-const FIXTURES_DIR = path.join(__dirname, "..", "..", "src", "test", "fixtures");
+const FIXTURES_DIR = path.join(
+  __dirname,
+  "..",
+  "..",
+  "src",
+  "test",
+  "fixtures"
+);
 
 // Enable snapshot updates via environment variable
 const UPDATE_SNAPSHOTS = process.env.UPDATE_SNAPSHOTS === "1";
@@ -212,7 +219,8 @@ suite("Fixture Tests", () => {
       globalStoragePath: "/tmp",
       logPath: "/tmp",
       asAbsolutePath: (p: string) => path.join(__dirname, "..", "..", p),
-      environmentVariableCollection: {} as vscode.GlobalEnvironmentVariableCollection,
+      environmentVariableCollection:
+        {} as vscode.GlobalEnvironmentVariableCollection,
       secrets: {
         get: () => Promise.resolve(undefined),
         store: () => Promise.resolve(),
@@ -242,7 +250,9 @@ suite("Fixture Tests", () => {
 
     test(fixtureName, async () => {
       // Read before file and normalize line endings
-      const beforeContent = fs.readFileSync(fixture.beforePath, "utf-8").replace(/\r\n/g, "\n");
+      const beforeContent = fs
+        .readFileSync(fixture.beforePath, "utf-8")
+        .replace(/\r\n/g, "\n");
 
       // Create a virtual document
       const doc = await vscode.workspace.openTextDocument({
@@ -275,7 +285,9 @@ suite("Fixture Tests", () => {
         );
       }
 
-      const afterContent = fs.readFileSync(fixture.afterPath, "utf-8").replace(/\r\n/g, "\n");
+      const afterContent = fs
+        .readFileSync(fixture.afterPath, "utf-8")
+        .replace(/\r\n/g, "\n");
 
       assert.strictEqual(
         actual,
