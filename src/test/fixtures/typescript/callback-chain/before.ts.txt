@@ -1,0 +1,5 @@
+fetch("/api/users")
+  .then((res) => res.json())
+  .then((data) => processData(data))
+  .catch((err) => handleError(err))
+  .finally(() => cleanup());

@@ -1,0 +1,9 @@
+function outer() {
+  const a = 1;
+  const foo = 2;
+
+  function inner() {
+    const x = 10;
+    const bar = 20;
+  }
+}

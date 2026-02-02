@@ -1,0 +1,13 @@
+function Button() {
+  return (
+    <button
+      id="submit-btn"
+      className="btn btn-primary"
+      disabled={false}
+      onClick={handleClick}
+      aria-label="Submit form"
+    >
+      Submit
+    </button>
+  );
+}

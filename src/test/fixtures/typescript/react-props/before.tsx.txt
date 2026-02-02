@@ -1,0 +1,7 @@
+interface ButtonProps {
+  id: string;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  variant?: "primary" | "secondary";
+}

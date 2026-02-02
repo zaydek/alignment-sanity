@@ -1,0 +1,3 @@
+const x ··············································= 1;
+const thisIsAVeryLongVariableNameThatShouldStillAlign = 2;
+const y ··············································= 3;

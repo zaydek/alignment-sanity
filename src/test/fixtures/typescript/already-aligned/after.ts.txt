@@ -1,0 +1,3 @@
+const short       = 1;
+const mediumName  = 2;
+const veryLongOne = 3;

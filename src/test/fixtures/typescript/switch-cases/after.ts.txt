@@ -1,0 +1,6 @@
+switch (status) {
+  case "pending": return "Waiting...";
+  case "loading": return "Loading...";
+  case "success": return "Done!";
+  case "error": return "Failed";
+}

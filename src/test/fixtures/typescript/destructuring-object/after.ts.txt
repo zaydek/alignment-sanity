@@ -1,0 +1,3 @@
+const { name, age, email } = user;
+const { x, y, z } ·········= point;
+const { width, height } ···= dimensions;

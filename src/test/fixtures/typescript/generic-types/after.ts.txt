@@ -1,0 +1,3 @@
+type Result<T> = { data: T; error: null } | { data: null; error: Error };
+type Option<T> = { value: T; hasValue: true } | { value: null; hasValue: false };
+type State<T> = { current: T; previous: T | null; next: T | null };
