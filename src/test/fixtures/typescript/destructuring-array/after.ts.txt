@@ -1,3 +1,3 @@
 const [first, second, third] = items;
-const [x, y, z] ·············= coordinates;
-const [head, ...tail] ·······= list;
+const [x, y, z]              = coordinates;
+const [head, ...tail]        = list;

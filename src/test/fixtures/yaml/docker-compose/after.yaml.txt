@@ -1,4 +1,4 @@
-version:· "3.8"
+version:  "3.8"
 services:
   web:
     image: nginx:latest
@@ -7,8 +7,8 @@ services:
     volumes:
       - ./html:/usr/share/nginx/html
   db:
-    image:······ postgres:15
+    image:       postgres:15
     environment:
-      POSTGRES_USER:···· admin
+      POSTGRES_USER:     admin
       POSTGRES_PASSWORD: secret
-      POSTGRES_DB:······ myapp
+      POSTGRES_DB:       myapp

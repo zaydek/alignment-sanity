@@ -33,7 +33,8 @@ const FIXTURES_DIR = path.join(
 const UPDATE_SNAPSHOTS = process.env.UPDATE_SNAPSHOTS === "1";
 
 // Padding character for visual alignment markers
-const PAD = "·";
+// Using regular space for easier fixture editing
+const PAD = " ";
 
 // Shared parser instance (initialized once)
 let parserService: ParserService | null = null;
@@ -53,6 +54,7 @@ const EXT_TO_LANG: Record<string, string> = {
   scss: "scss",
   less: "less",
   md: "markdown",
+  sql: "sql",
 };
 
 /**

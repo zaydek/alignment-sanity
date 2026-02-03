@@ -1,7 +1,7 @@
 interface ButtonProps {
-  id:······· string;
-  label:···· string;
-  onClick:·· () => void;
+  id:        string;
+  label:     string;
+  onClick:   () => void;
   disabled?: boolean;
-  variant?:· "primary" | "secondary";
+  variant?:  "primary" | "secondary";
 }

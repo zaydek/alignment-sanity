@@ -167,6 +167,11 @@ export class ParserService {
       return this.parseYamlWithRegex(document, startLine, endLine);
     }
 
+    // SQL uses regex fallback (no WASM grammar available)
+    if (parserLang === "sql") {
+      return this.parseSqlWithRegex(document, startLine, endLine);
+    }
+
     // Markdown parses code blocks with supported languages
     if (parserLang === "markdown") {
       return this.parseMarkdownCodeBlocks(document, startLine, endLine);
@@ -834,6 +839,559 @@ export class ParserService {
     }
 
     return colonPositions;
+  }
+
+  /**
+   * SQL regex-based parser.
+   * Handles CREATE TABLE columns, INSERT VALUES tuples, WHERE operators, SELECT AS.
+   *
+   * SQL alignment is statement-scoped: each statement resets alignment context.
+   */
+  private parseSqlWithRegex(
+    document: vscode.TextDocument,
+    startLine: number,
+    endLine: number,
+  ): AlignmentToken[] {
+    const tokens: AlignmentToken[] = [];
+    const text = document.getText();
+    const lines = text.split("\n");
+
+    // Parse statement by statement
+    let statementId = 0;
+    let inCreateTable = false;
+    let inInsertValues = false;
+    let inWhere = false;
+    let inSelectList = false;
+    let inCreateIndex = false;
+    let createTableStartLine = -1;
+    let whereStartLine = -1;
+    let selectListStartLine = -1;
+    let createIndexStartLine = -1;
+    let createIndexLines: Array<{ lineNum: number; lineText: string }> = [];
+
+    for (let lineNum = startLine; lineNum <= endLine && lineNum < lines.length; lineNum++) {
+      const lineText = lines[lineNum];
+      const trimmed = lineText.trim();
+      const upperTrimmed = trimmed.toUpperCase();
+
+      // Skip comments and empty lines
+      if (trimmed.startsWith("--") || trimmed === "") {
+        // If we were collecting CREATE INDEX lines, process them now
+        if (inCreateIndex && createIndexLines.length > 0) {
+          this.parseSqlCreateIndexGroup(createIndexLines, tokens, statementId);
+          createIndexLines = [];
+          inCreateIndex = false;
+        }
+        continue;
+      }
+
+      // Detect CREATE TABLE
+      if (upperTrimmed.startsWith("CREATE TABLE")) {
+        // Flush any pending CREATE INDEX
+        if (inCreateIndex && createIndexLines.length > 0) {
+          this.parseSqlCreateIndexGroup(createIndexLines, tokens, statementId);
+          createIndexLines = [];
+        }
+        statementId++;
+        inCreateTable = true;
+        inInsertValues = false;
+        inWhere = false;
+        inSelectList = false;
+        inCreateIndex = false;
+        createTableStartLine = lineNum;
+        continue;
+      }
+
+      // Detect CREATE INDEX - collect consecutive lines
+      if (upperTrimmed.startsWith("CREATE INDEX")) {
+        if (!inCreateIndex) {
+          // Flush any pending state
+          statementId++;
+          inCreateTable = false;
+          inInsertValues = false;
+          inWhere = false;
+          inSelectList = false;
+          inCreateIndex = true;
+          createIndexStartLine = lineNum;
+          createIndexLines = [];
+        }
+        createIndexLines.push({ lineNum, lineText });
+        continue;
+      } else if (inCreateIndex && createIndexLines.length > 0) {
+        // No longer on CREATE INDEX lines, process collected lines
+        this.parseSqlCreateIndexGroup(createIndexLines, tokens, statementId);
+        createIndexLines = [];
+        inCreateIndex = false;
+      }
+
+      // Detect INSERT INTO
+      if (upperTrimmed.startsWith("INSERT INTO") || upperTrimmed.startsWith("INSERT ")) {
+        statementId++;
+        inCreateTable = false;
+        inInsertValues = upperTrimmed.includes("VALUES");
+        inWhere = false;
+        inSelectList = false;
+        continue;
+      }
+
+      // Detect VALUES
+      if (upperTrimmed.startsWith("VALUES") || upperTrimmed.includes(") VALUES")) {
+        inInsertValues = true;
+        continue;
+      }
+
+      // Detect SELECT
+      if (upperTrimmed.startsWith("SELECT")) {
+        statementId++;
+        inCreateTable = false;
+        inInsertValues = false;
+        inWhere = false;
+        inSelectList = true;
+        selectListStartLine = lineNum;
+        continue;
+      }
+
+      // Detect FROM (ends SELECT list)
+      if (upperTrimmed.startsWith("FROM")) {
+        inSelectList = false;
+      }
+
+      // Detect WHERE
+      if (upperTrimmed.startsWith("WHERE") || upperTrimmed.startsWith("AND ") || upperTrimmed.startsWith("OR ")) {
+        if (upperTrimmed.startsWith("WHERE")) {
+          whereStartLine = lineNum;
+        }
+        inWhere = true;
+        inSelectList = false;
+        // Process this line for WHERE operators
+        this.parseSqlWhereOperators(lineText, lineNum, tokens, statementId, whereStartLine);
+        continue;
+      }
+
+      // Detect end of WHERE clause
+      if (upperTrimmed.startsWith("ORDER BY") || upperTrimmed.startsWith("GROUP BY") ||
+          upperTrimmed.startsWith("HAVING") || upperTrimmed.startsWith("LIMIT")) {
+        inWhere = false;
+      }
+
+      // Process INSERT VALUES tuples (before checking for ;)
+      if (inInsertValues && trimmed.startsWith("(")) {
+        this.parseSqlValuesTuple(lineText, lineNum, tokens, statementId);
+      }
+
+      // Process WHERE clause operators
+      if (inWhere && !upperTrimmed.startsWith("WHERE") && !upperTrimmed.startsWith("AND ") && !upperTrimmed.startsWith("OR ")) {
+        this.parseSqlWhereOperators(lineText, lineNum, tokens, statementId, whereStartLine);
+      }
+
+      // End of statement
+      if (trimmed.endsWith(";")) {
+        if (inCreateTable) {
+          this.parseSqlCreateTableColumns(lines, createTableStartLine, lineNum, tokens, statementId);
+        }
+        // Also check for WHERE on this line (e.g., "WHERE x = 1;")
+        if (inWhere) {
+          this.parseSqlWhereOperators(lineText, lineNum, tokens, statementId, whereStartLine);
+        }
+        inCreateTable = false;
+        inInsertValues = false;
+        inWhere = false;
+        inSelectList = false;
+        continue;
+      }
+
+      // Process SELECT list AS aliases
+      if (inSelectList && lineText.toLowerCase().includes(" as ")) {
+        this.parseSqlSelectAs(lineText, lineNum, tokens, statementId, selectListStartLine);
+      }
+    }
+
+    // Flush any remaining CREATE INDEX lines
+    if (inCreateIndex && createIndexLines.length > 0) {
+      this.parseSqlCreateIndexGroup(createIndexLines, tokens, statementId);
+    }
+
+    return tokens;
+  }
+
+  /**
+   * Parse a group of consecutive CREATE INDEX statements.
+   */
+  private parseSqlCreateIndexGroup(
+    indexLines: Array<{ lineNum: number; lineText: string }>,
+    tokens: AlignmentToken[],
+    statementId: number,
+  ): void {
+    if (indexLines.length < 2) {
+      // Single CREATE INDEX line - still emit tokens for potential future grouping
+      if (indexLines.length === 1) {
+        this.parseSqlCreateIndex(indexLines[0].lineText, indexLines[0].lineNum, tokens, statementId);
+      }
+      return;
+    }
+
+    // Multiple CREATE INDEX lines - they share the same statementId for grouping
+    for (const { lineText, lineNum } of indexLines) {
+      this.parseSqlCreateIndex(lineText, lineNum, tokens, statementId);
+    }
+  }
+
+  /**
+   * Parse CREATE TABLE column definitions.
+   * Aligns: column_name TYPE CONSTRAINTS
+   */
+  private parseSqlCreateTableColumns(
+    lines: string[],
+    startLine: number,
+    endLine: number,
+    tokens: AlignmentToken[],
+    statementId: number,
+  ): void {
+    // Columns are typically on lines between CREATE TABLE ( and );
+    // Each column line: name TYPE [CONSTRAINTS]
+    const columnLines: Array<{ lineNum: number; parts: string[]; indent: number }> = [];
+
+    for (let lineNum = startLine + 1; lineNum < endLine; lineNum++) {
+      const lineText = lines[lineNum];
+      const trimmed = lineText.trim();
+      const indent = getIndentLevel(lineText);
+
+      // Skip empty lines, closing paren, constraints like PRIMARY KEY, etc.
+      if (trimmed === "" || trimmed.startsWith(")") ||
+          trimmed.toUpperCase().startsWith("PRIMARY KEY") ||
+          trimmed.toUpperCase().startsWith("FOREIGN KEY") ||
+          trimmed.toUpperCase().startsWith("UNIQUE") ||
+          trimmed.toUpperCase().startsWith("CHECK") ||
+          trimmed.toUpperCase().startsWith("CONSTRAINT")) {
+        continue;
+      }
+
+      // Parse column definition: name TYPE [CONSTRAINTS...]
+      // Remove trailing comma
+      const cleanLine = trimmed.replace(/,\s*$/, "");
+      const parts = cleanLine.split(/\s+/);
+
+      if (parts.length >= 2) {
+        columnLines.push({ lineNum, parts, indent });
+      }
+    }
+
+    if (columnLines.length < 2) return; // Need at least 2 lines to align
+
+    // Emit tokens for column name alignment (pad column names)
+    for (const col of columnLines) {
+      const lineText = lines[col.lineNum];
+      const colNameStart = lineText.indexOf(col.parts[0]);
+
+      // Token for column name (to pad after it)
+      // column = START of name, text = name, so padding goes after name
+      tokens.push({
+        line: col.lineNum,
+        column: colNameStart,
+        text: col.parts[0],
+        type: ":",  // Using : type for padAfter behavior
+        indent: col.indent,
+        parentType: "sql_column_name",
+        tokenIndex: 0,
+        scopeId: `sql_create_${statementId}`,
+        operatorCountOnLine: 2,
+      });
+
+      // Token for type (to pad after it for constraint alignment)
+      if (col.parts.length >= 2) {
+        const typeStart = lineText.indexOf(col.parts[1], colNameStart + col.parts[0].length);
+        if (typeStart >= 0) {
+          tokens.push({
+            line: col.lineNum,
+            column: typeStart,
+            text: col.parts[1],
+            type: ":",  // Using : type for padAfter behavior
+            indent: col.indent,
+            parentType: "sql_column_type",
+            tokenIndex: 1,
+            scopeId: `sql_create_${statementId}`,
+            operatorCountOnLine: 2,
+          });
+        }
+      }
+    }
+  }
+
+  /**
+   * Parse CREATE INDEX statement.
+   * Aligns: CREATE INDEX name ON table USING method (columns)
+   */
+  private parseSqlCreateIndex(
+    lineText: string,
+    lineNum: number,
+    tokens: AlignmentToken[],
+    statementId: number,
+  ): void {
+    const indent = getIndentLevel(lineText);
+    const upper = lineText.toUpperCase();
+
+    // Find ON keyword position
+    const onMatch = upper.match(/\bON\b/);
+    if (onMatch && onMatch.index !== undefined) {
+      tokens.push({
+        line: lineNum,
+        column: onMatch.index,
+        text: "ON",
+        type: "=",  // Using = for padBefore
+        indent,
+        parentType: "sql_index_on",
+        tokenIndex: 0,
+        scopeId: `sql_index_${statementId}`,
+        operatorCountOnLine: 2,
+      });
+    }
+
+    // Find USING keyword position
+    const usingMatch = upper.match(/\bUSING\b/);
+    if (usingMatch && usingMatch.index !== undefined) {
+      tokens.push({
+        line: lineNum,
+        column: usingMatch.index,
+        text: "USING",
+        type: ":",  // Using : for padAfter
+        indent,
+        parentType: "sql_index_using",
+        tokenIndex: 1,
+        scopeId: `sql_index_${statementId}`,
+        operatorCountOnLine: 2,
+      });
+    }
+  }
+
+  /**
+   * Parse INSERT VALUES tuple.
+   * Aligns comma-separated values across tuples.
+   */
+  private parseSqlValuesTuple(
+    lineText: string,
+    lineNum: number,
+    tokens: AlignmentToken[],
+    statementId: number,
+  ): void {
+    const indent = getIndentLevel(lineText);
+
+    // Find all comma positions (structural, not inside strings)
+    const commaPositions = this.findSqlCommas(lineText);
+
+    // Find the opening/closing parens
+    const openParen = lineText.indexOf("(");
+    const closeParen = lineText.lastIndexOf(")");
+    if (openParen < 0 || closeParen < 0) return;
+
+    // For VALUES alignment, we pad AFTER each value (except last) so next values align
+    // But we need the FIRST value to have padAfter so second values align,
+    // the SECOND value to have padAfter so third values align, etc.
+    let tokenIndex = 0;
+    const operatorCountOnLine = commaPositions.length + 1;
+
+    // Use array_ prefix for scopeId to enable cross-line alignment in Grouper
+    const scopeId = `array_sql_values_${statementId}`;
+
+    // First value: between ( and first comma
+    const firstComma = commaPositions.length > 0 ? commaPositions[0] : closeParen;
+    if (firstComma > openParen) {
+      const firstValue = lineText.substring(openParen + 1, firstComma).trim();
+      const firstValueStart = lineText.indexOf(firstValue, openParen + 1);
+
+      // Use ":" type for padAfter behavior - pad after this value
+      tokens.push({
+        line: lineNum,
+        column: firstValueStart,
+        text: firstValue,
+        type: ":",  // padAfter
+        indent,
+        parentType: "sql_values_item",
+        tokenIndex: tokenIndex++,
+        scopeId,
+        operatorCountOnLine,
+      });
+    }
+
+    // Subsequent values: between commas (but NOT the last value - no padding needed before closing paren)
+    for (let i = 0; i < commaPositions.length - 1; i++) {
+      const commaPos = commaPositions[i];
+      const nextBoundary = commaPositions[i + 1];
+
+      if (nextBoundary > commaPos) {
+        const valueText = lineText.substring(commaPos + 1, nextBoundary).trim();
+        const valueStart = lineText.indexOf(valueText, commaPos + 1);
+
+        // Use ":" type for padAfter behavior - pad after this value
+        tokens.push({
+          line: lineNum,
+          column: valueStart,
+          text: valueText,
+          type: ":",  // padAfter
+          indent,
+          parentType: "sql_values_item",
+          tokenIndex: tokenIndex++,
+          scopeId,
+          operatorCountOnLine,
+        });
+      }
+    }
+  }
+
+  /**
+   * Parse WHERE clause operators.
+   * Aligns: =, <>, !=, <, >, <=, >=, <@, ~, LIKE, etc.
+   */
+  private parseSqlWhereOperators(
+    lineText: string,
+    lineNum: number,
+    tokens: AlignmentToken[],
+    statementId: number,
+    whereStartLine: number,
+  ): void {
+    // Use normalized indent (0) so WHERE and AND lines group together
+    // despite their different actual indentation
+    const normalizedIndent = 0;
+
+    // SQL comparison operators (order matters - longer first)
+    const operators = ["<@", "<>", "!=", "<=", ">=", "~", "<", ">", "="];
+
+    for (const op of operators) {
+      const opIndex = this.findSqlOperator(lineText, op);
+      if (opIndex >= 0) {
+        tokens.push({
+          line: lineNum,
+          column: opIndex,
+          text: op,
+          type: "=",  // Use = type for padBefore
+          indent: normalizedIndent,
+          parentType: "sql_where_op",
+          tokenIndex: 0,
+          scopeId: `sql_where_${statementId}_${whereStartLine}`,
+          operatorCountOnLine: 1,
+        });
+        break; // Only take the first operator per line
+      }
+    }
+  }
+
+  /**
+   * Parse SELECT AS aliases.
+   * Aligns the AS keyword across SELECT list items.
+   */
+  private parseSqlSelectAs(
+    lineText: string,
+    lineNum: number,
+    tokens: AlignmentToken[],
+    statementId: number,
+    selectStartLine: number,
+  ): void {
+    const indent = getIndentLevel(lineText);
+
+    // Find AS keyword (case-insensitive, word boundary)
+    const asMatch = lineText.match(/\bas\b/i);
+    if (asMatch && asMatch.index !== undefined) {
+      tokens.push({
+        line: lineNum,
+        column: asMatch.index,
+        text: "as",
+        type: "=",  // Use = type for padBefore
+        indent,
+        parentType: "sql_select_as",
+        tokenIndex: 0,
+        scopeId: `sql_select_${statementId}_${selectStartLine}`,
+        operatorCountOnLine: 1,
+      });
+    }
+  }
+
+  /**
+   * Find structural commas in SQL (not inside strings).
+   */
+  private findSqlCommas(line: string): number[] {
+    const positions: number[] = [];
+    let inSingleQuote = false;
+    let inDoubleQuote = false;
+    let parenDepth = 0;
+
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      const prevChar = i > 0 ? line[i - 1] : "";
+
+      // Handle escaped quotes
+      if (char === "'" && prevChar !== "\\" && !inDoubleQuote) {
+        inSingleQuote = !inSingleQuote;
+        continue;
+      }
+      if (char === '"' && prevChar !== "\\" && !inSingleQuote) {
+        inDoubleQuote = !inDoubleQuote;
+        continue;
+      }
+
+      if (!inSingleQuote && !inDoubleQuote) {
+        if (char === "(") parenDepth++;
+        if (char === ")") parenDepth--;
+
+        // Only capture top-level commas (inside the VALUES tuple, not nested)
+        if (char === "," && parenDepth === 1) {
+          positions.push(i);
+        }
+      }
+    }
+
+    return positions;
+  }
+
+  /**
+   * Find SQL operator position (not inside strings).
+   */
+  private findSqlOperator(line: string, op: string): number {
+    let inSingleQuote = false;
+    let inDoubleQuote = false;
+
+    for (let i = 0; i <= line.length - op.length; i++) {
+      const char = line[i];
+      const prevChar = i > 0 ? line[i - 1] : "";
+
+      // Handle quotes
+      if (char === "'" && prevChar !== "\\" && !inDoubleQuote) {
+        inSingleQuote = !inSingleQuote;
+        continue;
+      }
+      if (char === '"' && prevChar !== "\\" && !inSingleQuote) {
+        inDoubleQuote = !inDoubleQuote;
+        continue;
+      }
+
+      if (!inSingleQuote && !inDoubleQuote) {
+        if (line.substring(i, i + op.length) === op) {
+          // Make sure it's not part of a larger operator
+          const before = i > 0 ? line[i - 1] : " ";
+          const after = i + op.length < line.length ? line[i + op.length] : " ";
+
+          // For single char operators, check they're not part of multi-char ops
+          if (op.length === 1) {
+            if (op === "=" && (before === "<" || before === ">" || before === "!" || after === ">")) {
+              continue;
+            }
+            if (op === "<" && (after === "=" || after === ">" || after === "@")) {
+              continue;
+            }
+            // Skip > when part of ->, ->>, or >= 
+            if (op === ">" && (after === "=" || after === ">" || before === "<" || before === "-" || before === ">")) {
+              continue;
+            }
+            // Skip ~ when it's at the start of a word (might be PostgreSQL bitwise NOT)
+            if (op === "~" && (before !== " " && before !== "\t" && before !== "(")) {
+              continue;
+            }
+          }
+
+          return i;
+        }
+      }
+    }
+
+    return -1;
   }
 
   /**

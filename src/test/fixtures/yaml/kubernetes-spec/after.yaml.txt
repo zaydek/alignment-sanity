@@ -1,9 +1,9 @@
 apiVersion: apps/v1
-kind:······ Deployment
-metadata:··
-  name:·· myapp
+kind:       Deployment
+metadata:  
+  name:   myapp
   labels:
-    app:· myapp
+    app:  myapp
     tier: frontend
 spec:
   replicas: 3

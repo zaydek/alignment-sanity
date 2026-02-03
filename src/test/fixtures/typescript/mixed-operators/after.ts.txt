@@ -1,8 +1,8 @@
 const config = {
-  name:··· "test",
-  value:·· 42,
+  name:    "test",
+  value:   42,
   enabled: true,
 };
 
-const x ··= 1;
+const x   = 1;
 const foo = 2;

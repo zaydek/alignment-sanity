@@ -1,10 +1,10 @@
 {
   "scripts": {
-    "dev":······ "next dev",
-    "build":···· "next build",
-    "start":···· "next start",
-    "lint":····· "eslint .",
-    "test":····· "vitest",
+    "dev":       "next dev",
+    "build":     "next build",
+    "start":     "next start",
+    "lint":      "eslint .",
+    "test":      "vitest",
     "typecheck": "tsc --noEmit"
   }
 }
