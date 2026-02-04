@@ -152,6 +152,76 @@ export async function activate(
   );
   context.subscriptions.push(disableCommand);
 
+  // Register format command - applies alignment as actual text edits
+  const formatCommand = vscode.commands.registerCommand(
+    "even-better-virtual-align.format",
+    async () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) {
+        vscode.window.showWarningMessage("No active editor");
+        return;
+      }
+
+      const document = editor.document;
+      const langId = document.languageId;
+
+      if (!isSupportedLanguage(langId)) {
+        vscode.window.showWarningMessage(
+          `Even Better Virtual Align: Language "${langId}" is not supported`
+        );
+        return;
+      }
+
+      try {
+        // Parse document
+        const docAdapter = new VSCodeDocumentAdapter(document);
+        const tokens = await parserService.parse(docAdapter, 0, document.lineCount - 1);
+        const groups = groupTokens(tokens);
+
+        if (groups.length === 0) {
+          vscode.window.showInformationMessage("No alignable content found");
+          return;
+        }
+
+        // Calculate padding operations
+        const paddingOps = calculatePaddingOps(document, groups);
+
+        if (paddingOps.length === 0) {
+          vscode.window.showInformationMessage("Content is already aligned");
+          return;
+        }
+
+        // Apply edits
+        const success = await editor.edit((editBuilder) => {
+          // Sort by line desc, then column desc to apply from end to start
+          const sorted = [...paddingOps].sort((a, b) => {
+            if (a.line !== b.line) return b.line - a.line;
+            return b.column - a.column;
+          });
+
+          for (const op of sorted) {
+            const position = new vscode.Position(op.line, op.column);
+            editBuilder.insert(position, " ".repeat(op.spaces));
+          }
+        });
+
+        if (success) {
+          log(`Applied ${paddingOps.length} alignment edits`);
+          vscode.window.showInformationMessage(
+            `Applied ${paddingOps.length} alignment edits`
+          );
+        } else {
+          vscode.window.showErrorMessage("Failed to apply formatting");
+        }
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        log(`Format failed: ${errorMsg}`);
+        vscode.window.showErrorMessage(`Format failed: ${errorMsg}`);
+      }
+    },
+  );
+  context.subscriptions.push(formatCommand);
+
   // Listen for active editor changes
   const activeEditorDisposable = vscode.window.onDidChangeActiveTextEditor(
     (editor) => {
@@ -179,6 +249,96 @@ export async function activate(
   }
 
   log("Activated successfully");
+}
+
+/**
+ * Padding operation for applying alignment as text edits.
+ */
+interface PaddingOp {
+  line: number;
+  column: number;
+  spaces: number;
+}
+
+/**
+ * Calculates padding operations to apply alignment as actual text.
+ * This is the same logic as the test runner's applyAlignment function.
+ */
+function calculatePaddingOps(
+  document: vscode.TextDocument,
+  groups: ReturnType<typeof groupTokens>
+): PaddingOp[] {
+  // Sort groups by line then column
+  const sortedGroups = [...groups].sort((a, b) => {
+    if (a.tokens[0].line !== b.tokens[0].line) {
+      return a.tokens[0].line - b.tokens[0].line;
+    }
+    return a.tokens[0].column - b.tokens[0].column;
+  });
+
+  const lineShift = new Map<number, number>();
+  const paddingOps: PaddingOp[] = [];
+
+  for (const group of sortedGroups) {
+    let visualTargetColumn: number;
+
+    if (group.tokens.length === 1) {
+      const token = group.tokens[0];
+      const shift = lineShift.get(token.line) ?? 0;
+      if (group.padAfter) {
+        const originalEndColumn = token.column + token.text.length;
+        const originalPadding = group.targetColumn - originalEndColumn;
+        visualTargetColumn = originalEndColumn + shift + originalPadding;
+      } else {
+        const originalPadding = group.targetColumn - token.column;
+        visualTargetColumn = token.column + shift + originalPadding;
+      }
+    } else if (group.padAfter) {
+      visualTargetColumn = Math.max(
+        ...group.tokens.map((t) => {
+          const shift = lineShift.get(t.line) ?? 0;
+          return t.column + t.text.length + shift;
+        })
+      );
+    } else {
+      visualTargetColumn = Math.max(
+        ...group.tokens.map((t) => {
+          const shift = lineShift.get(t.line) ?? 0;
+          return t.column + shift;
+        })
+      );
+    }
+
+    for (const token of group.tokens) {
+      const shift = lineShift.get(token.line) ?? 0;
+      let spacesNeeded: number;
+      let insertColumn: number;
+
+      if (group.padAfter) {
+        const visualEndColumn = token.column + token.text.length + shift;
+        spacesNeeded = visualTargetColumn - visualEndColumn;
+        insertColumn = token.column + token.text.length;
+      } else {
+        const visualColumn = token.column + shift;
+        spacesNeeded = visualTargetColumn - visualColumn;
+        insertColumn = token.column;
+      }
+
+      if (spacesNeeded > 0) {
+        paddingOps.push({
+          line: token.line,
+          column: insertColumn,
+          spaces: spacesNeeded,
+        });
+        lineShift.set(
+          token.line,
+          (lineShift.get(token.line) ?? 0) + spacesNeeded
+        );
+      }
+    }
+  }
+
+  return paddingOps;
 }
 
 /**

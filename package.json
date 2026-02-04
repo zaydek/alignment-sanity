@@ -42,6 +42,10 @@
       {
         "command": "even-better-virtual-align.disable",
         "title": "Even Better Virtual Align: Disable"
+      },
+      {
+        "command": "even-better-virtual-align.format",
+        "title": "Even Better Virtual Align: Apply Formatting"
       }
     ],
     "keybindings": [
